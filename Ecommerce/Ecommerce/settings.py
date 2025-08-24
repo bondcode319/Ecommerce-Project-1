@@ -37,6 +37,8 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'stock_app',  # Your stock app
+    'rest_framework',  # If you're using Django REST Framework
 ]
 
 MIDDLEWARE = [
