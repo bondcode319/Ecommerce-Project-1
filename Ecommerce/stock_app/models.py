@@ -4,14 +4,23 @@ from django.contrib.auth.models import User
 # Create your models here.
 
 class Product(models.Model):
+    CATEGORY_CHOICES = [
+        ('electronics', 'Electronics'),
+        ('clothing', 'Clothing'),
+        ('books', 'Books'),
+        ('home', 'Home & Garden'),
+        ('other', 'Other'),
+    ]
+    
     name = models.CharField(max_length=255)
-    description = models.TextField(blank=True , null=False)
-    category = models.CharField(max_length=100)
+    description = models.TextField(blank=True)
+    category = models.CharField(max_length=100, choices=CATEGORY_CHOICES)
     price = models.DecimalField(max_digits=10, decimal_places=2)
-    stock = models.PositiveIntegerField()  # Removed duplicate stockQuantity
+    stock = models.PositiveIntegerField()
     imageUrl = models.URLField(max_length=200, blank=True, null=True)
-    created_date = models.DateTimeField(auto_now_add=True)  # Removed duplicate createdDate
+    created_date = models.DateTimeField(auto_now_add=True)
     owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name='products')
+    is_available = models.BooleanField(default=True)
 
     def __str__(self):
         return self.name
