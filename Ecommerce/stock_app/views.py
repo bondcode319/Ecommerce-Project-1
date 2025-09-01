@@ -1,4 +1,4 @@
-from django.shortcuts import render, get_object_or_404
+from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db.models import Q
 from django.views.generic import ListView, CreateView, UpdateView, DeleteView
@@ -6,6 +6,9 @@ from django.urls import reverse_lazy
 from django.contrib import messages
 from django.http import JsonResponse
 from django.core.exceptions import PermissionDenied
+from django.contrib.auth import login, authenticate, logout
+from django.contrib.auth.forms import UserCreationForm
+from django.contrib.auth.decorators import login_required
 
 from rest_framework import viewsets, filters, status, throttling
 from rest_framework.permissions import IsAuthenticatedOrReadOnly, IsAuthenticated, BasePermission
@@ -135,15 +138,15 @@ class ProductDeleteView(LoginRequiredMixin, DeleteView):
 # ----------------------------
 class ProductPagination(PageNumberPagination):
     page_size = 10
-    page_size_query_param = 'page_size'
-    max_page_size = 100
-
-
 class ProductViewSet(viewsets.ModelViewSet):
+    queryset = Product.objects.all()
     serializer_class = ProductSerializer
     permission_classes = [IsAuthenticatedOrReadOnly, IsOwnerOrStaff]
     pagination_class = ProductPagination
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ['category', 'is_available']
+    search_fields = ['name', 'description', 'category']
+    ordering_fields = ['price', 'created_date']
     filterset_fields = ['category', 'is_available']
     search_fields = ['name', 'description', 'category']
     ordering_fields = ['price', 'created_date', 'stock']
@@ -234,3 +237,106 @@ def product_categories_ajax(request):
     if request.headers.get("x-requested-with") == "XMLHttpRequest":
         return JsonResponse({'categories': dict(Product.CATEGORY_CHOICES)})
     return JsonResponse({'error': 'Invalid request'}, status=400)
+
+
+# ----------------------------
+# Authentication Views
+# ----------------------------
+def register_view(request):
+    if request.method == 'POST':
+        form = UserCreationForm(request.POST)
+        if form.is_valid():
+            user = form.save()
+            login(request, user)
+            messages.success(request, 'Registration successful!')
+            return redirect('product-list')
+        else:
+            messages.error(request, 'Registration failed. Please correct the errors.')
+    else:
+        form = UserCreationForm()
+    return render(request, 'authentication/register.html', {'form': form})
+
+def login_view(request):
+    if request.method == 'POST':
+        username = request.POST.get('username')
+        password = request.POST.get('password')
+        user = authenticate(request, username=username, password=password)
+        if user is not None:
+            login(request, user)
+            messages.success(request, f'Welcome back, {username}!')
+            next_url = request.GET.get('next', 'product-list')
+            return redirect(next_url)
+        else:
+            messages.error(request, 'Invalid username or password.')
+    return render(request, 'authentication/login.html')
+
+@login_required
+def profile_view(request):
+    return render(request, 'authentication/profile.html')
+
+
+
+
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import AllowAny
+from rest_framework.authtoken.models import Token
+from django.core.exceptions import ObjectDoesNotExist
+from .serializers import UserSerializer
+
+# Add these views after your existing views
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def register_api_view(request):
+    """
+    API endpoint for user registration.
+    """
+    serializer = UserSerializer(data=request.data)
+    if serializer.is_valid():
+        user = serializer.save()
+        if isinstance(user, list):
+            user = user[0]  # Take the first user if a list is returned
+        token, created = Token.objects.get_or_create(user=user)
+        return Response({
+            "message": "User registered successfully",
+            "user_id": user.id,
+            "username": user.username,
+            "token": token.key
+        }, status=status.HTTP_201_CREATED)
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def login_api_view(request):
+    """
+    API endpoint for user authentication and token generation.
+    """
+    username = request.data.get('username')
+    password = request.data.get('password')
+    user = authenticate(request, username=username, password=password)
+
+    if user is not None and hasattr(user, 'username'):
+        token, created = Token.objects.get_or_create(user=user)
+        return Response({
+            "message": "Login successful",
+            "user_id": user.id,
+            "username": user.username,
+            "token": token.key
+        }, status=status.HTTP_200_OK)
+    else:
+        return Response({
+            "error": "Invalid credentials"
+        }, status=status.HTTP_401_UNAUTHORIZED)
+
+@api_view(['POST'])
+def logout_api_view(request):
+    """
+    API endpoint for user logout.
+    """
+    try:
+        request.user.auth_token.delete()
+    except (AttributeError, ObjectDoesNotExist):
+        pass
+    
+    logout(request)
+    return Response({"message": "Successfully logged out"}, status=status.HTTP_200_OK)

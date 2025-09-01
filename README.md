@@ -48,6 +48,34 @@ Initialize project, set up virtualenv, create apps, add models/serializers
 2
 User API & Authentication
 User endpoints, registration, login/logout, permissions
+
+Register a new user:
+POST http://localhost:8000/api/register/
+Content-Type: application/json
+
+{
+    "username": "testuser",
+    "password": "StrongPass123!",
+    "email": "test@example.com"
+}
+
+Login:
+POST http://localhost:8000/api/login/
+Content-Type: application/json
+
+{
+    "username": "testuser",
+    "password": "StrongPass123!"
+}
+
+Using the token for authenticated requests:
+GET http://localhost:8000/api/products/
+Authorization: Token your-token-here
+
+Logout:
+POST http://localhost:8000/api/logout/
+Authorization: Token your-token-here
+
 3
 Product CRUD API
 Endpoints for product list/detail/create/update/delete
